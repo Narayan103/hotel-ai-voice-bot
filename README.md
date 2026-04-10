@@ -100,16 +100,16 @@ python app.py
 
 ## Progress
 
-| Step | Feature | Status |
-|------|---------|--------|
-| 1 | Project scaffold + GitHub setup | ✅ Done |
-| 2 | Chat UI (components + state) | ✅ Done |
-| 3 | Voice input (Web Speech API) | 🔜 Next |
-| 4 | Backend API + intent detection | ⬜ Pending |
-| 5 | Voice output (SpeechSynthesis) | ⬜ Pending |
-| 6 | Deployment (Vercel + Render) | ⬜ Pending |
-
----
+| Step | Feature | AWS Service | Status |
+|------|---------|-------------|--------|
+| 1 | Project scaffold | — | ✅ Done |
+| 2 | Chat UI | — | ✅ Done |
+| 3 | Audio capture from mic | MediaRecorder API | 🔜 Next |
+| 4 | Speech to text | Amazon Transcribe | ⬜ |
+| 5 | Intent detection | Amazon Comprehend | ⬜ |
+| 6 | Response engine | Flask | ⬜ |
+| 7 | Text to speech | Amazon Polly | ⬜ |
+| 8 | Deployment | Amplify + Beanstalk | ⬜ |
 
 ## How to Explain This Project in Interviews
 
