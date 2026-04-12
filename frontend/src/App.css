@@ -277,3 +277,15 @@ body {
 
 .send-btn:hover:not(:disabled) { background: #4338ca; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Recording duration inside label ── */
+.voice-btn.listening {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.2);
+}
+
+/* ── Processing state spinner feel ── */
+.voice-btn.loading {
+  background: #374151;
+  opacity: 0.8;
+}

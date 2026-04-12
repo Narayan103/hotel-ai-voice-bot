@@ -1,170 +1,155 @@
 // ChatWindow.jsx
-// The central orchestrator of the chat feature.
-// Real-world concept: Container vs Presentational components.
-//   Container (this file) = owns state, handles logic, passes data down
-//   Presentational (MessageBubble etc.) = receives props, renders UI
-// This pattern is used across React codebases everywhere.
+// Updated to use useAudioRecorder hook.
+// Audio blob is sent to Flask backend via chatService (Step 4).
+// For now: placeholder sendMessage shows the audio was captured.
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import VoiceButton from './VoiceButton';
+import useAudioRecorder, { RECORDER_STATES } from '../hooks/useAudioRecorder';
 
 function ChatWindow() {
-  // --- STATE ---
-  // useState stores data that, when changed, causes a re-render.
-  // Each piece of state has a single responsibility.
 
-  // The full conversation history — array of message objects
   const [messages, setMessages] = useState([
     {
       id: crypto.randomUUID(),
       role: 'bot',
-      text: "Welcome to Grand Palace Hotel! 🏨 I'm your AI assistant. How can I help you today? You can ask me about room bookings, availability, pricing, or any hotel services.",
+      text: "Welcome to Grand Palace Hotel! 🏨 I'm your AI assistant. How can I help you today? Ask me about room bookings, availability, pricing, or any hotel services.",
       timestamp: new Date(),
       intent: 'greeting',
     },
   ]);
 
-  // What the user has typed (text input fallback)
   const [inputText, setInputText] = useState('');
+  const [isTyping, setIsTyping]   = useState(false);
+  const [error, setError]         = useState(null);
+  const messagesEndRef            = useRef(null);
 
-  // Voice button state machine: 'idle' | 'listening' | 'loading'
-  const [voiceState, setVoiceState] = useState('idle');
-
-  // Whether the bot is currently generating a response
-  const [isTyping, setIsTyping] = useState(false);
-
-  // Error message to show the user
-  const [error, setError] = useState(null);
-
-  // --- REFS ---
-  // useRef gives you a mutable object that does NOT trigger re-renders.
-  // Perfect for: DOM references, timers, previous values.
-
-  // Reference to the bottom of the message list — for auto-scrolling
-  const messagesEndRef = useRef(null);
-
-  // --- EFFECTS ---
-  // useEffect runs after every render where its dependencies changed.
-  // Here: auto-scroll to bottom whenever messages array updates.
+  // Auto-scroll when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // --- HANDLERS ---
-
-  // Adds a message to the conversation history.
-  // Using functional update form: prev => [...prev, newMsg]
-  // This ensures we always work with the LATEST state,
-  // not a stale closure. This is a common React bug if done wrong.
-  const addMessage = (role, text, intent = null) => {
-    const newMessage = {
-      id: crypto.randomUUID(),
+  // addMessage — uses functional update to prevent stale closure bugs
+  const addMessage = useCallback((role, text, intent = null) => {
+    setMessages(prev => [...prev, {
+      id:        crypto.randomUUID(),
       role,
       text,
       timestamp: new Date(),
       intent,
-    };
-    setMessages(prev => [...prev, newMessage]);
-    return newMessage;
-  };
+    }]);
+  }, []);
 
-  // Sends user text to the backend and handles the response.
-  // This is a placeholder — in Step 4, this will call the real API.
-  const sendMessage = async (text) => {
+  // sendMessage — called with plain text (from voice OR text input)
+  // In Step 4, this will call the real Flask API
+  const sendMessage = useCallback(async (text) => {
     if (!text.trim()) return;
-
-    // Clear any previous error
     setError(null);
-
-    // Add user message to UI immediately (optimistic update)
     addMessage('user', text);
     setInputText('');
-
-    // Show typing indicator
     setIsTyping(true);
-    setVoiceState('loading');
 
     try {
-      // --- PLACEHOLDER — Step 4 replaces this with real API call ---
-      // Simulate network delay
+      // ── PLACEHOLDER ──────────────────────────────────────────────
+      // Step 4 replaces this block with a real API call to Flask,
+      // which calls Amazon Transcribe + Comprehend + Polly.
       await new Promise(resolve => setTimeout(resolve, 1200));
+      addMessage('bot', `Received: "${text}". Full AI pipeline connects in Step 4.`, 'general_query');
+      // ── END PLACEHOLDER ──────────────────────────────────────────
+    } catch (err) {
+      setError('Could not reach the hotel system. Please try again.');
+      console.error('sendMessage error:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [addMessage]);
 
-      // Mock response for now
-      const mockResponse = {
-        text: `I received your message: "${text}". The full AI response system will be connected in Step 4.`,
-        intent: 'general_query',
-      };
-      // --- END PLACEHOLDER ---
+  // onAudioReady — called by useAudioRecorder when audio blob is ready.
+  // This is the bridge between the recording hook and the send logic.
+  // In Step 4, this will send the blob directly to Flask for Transcribe.
+  const handleAudioReady = useCallback(async (audioBlob) => {
+    try {
+      // Log blob details so you can verify audio is being captured
+      console.log('Audio captured:', {
+        size:  `${(audioBlob.size / 1024).toFixed(1)} KB`,
+        type:  audioBlob.type,
+      });
 
-      addMessage('bot', mockResponse.text, mockResponse.intent);
+      // ── PLACEHOLDER ──────────────────────────────────────────────
+      // Step 4 will send this blob to /api/transcribe on Flask.
+      // Flask sends it to Amazon Transcribe and returns the text.
+      // For now: show a message confirming audio was captured.
+      addMessage('bot', `✅ Audio captured (${(audioBlob.size / 1024).toFixed(1)} KB). Amazon Transcribe integration coming in Step 4.`, null);
+      // ── END PLACEHOLDER ──────────────────────────────────────────
 
     } catch (err) {
-      // Never show raw error objects to users — always human-friendly messages
-      setError('Sorry, I could not connect to the hotel system. Please try again.');
-      console.error('Chat error:', err);
+      setError('Failed to process audio. Please try again.');
+      console.error('handleAudioReady error:', err);
     } finally {
-      // finally block ALWAYS runs — whether success or error.
-      // This ensures the UI never gets stuck in a loading state.
-      setIsTyping(false);
-      setVoiceState('idle');
+      reset();
+    }
+  }, [addMessage]);
+
+  // Wire up the audio recorder hook
+  const {
+    recorderState,
+    error:             recorderError,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    reset,
+    RECORDER_STATES: RS,
+  } = useAudioRecorder({ onAudioReady: handleAudioReady });
+
+  // Voice button click — toggle record/stop
+  const handleVoiceClick = () => {
+    if (recorderState === RS.IDLE || recorderState === RS.ERROR) {
+      startRecording();
+    } else if (recorderState === RS.RECORDING) {
+      stopRecording();
     }
   };
 
-  // Handle text input form submission
   const handleTextSubmit = (e) => {
-    e.preventDefault(); // Prevent page reload (default form behavior)
+    e.preventDefault();
     sendMessage(inputText);
   };
 
-  // Handle voice button click — placeholder, Step 3 adds real speech
-  const handleVoiceClick = () => {
-    if (voiceState === 'idle') {
-      // Placeholder: just show listening state for 2 seconds
-      setVoiceState('listening');
-      setTimeout(() => {
-        setVoiceState('idle');
-        sendMessage('Book a deluxe room for two nights'); // Mock transcript
-      }, 2000);
-    } else if (voiceState === 'listening') {
-      setVoiceState('idle');
-    }
-  };
+  // Combine recorder error and chat error for display
+  const displayError = recorderError || error;
 
-  // --- RENDER ---
   return (
     <div className="chat-window">
 
-      {/* Message list — scrollable area */}
       <div className="messages-container">
         {messages.map(msg => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
 
-        {/* Show typing indicator when bot is processing */}
         {isTyping && <TypingIndicator />}
 
-        {/* Error banner */}
-        {error && (
+        {displayError && (
           <div className="error-banner">
-            ⚠️ {error}
-            <button onClick={() => setError(null)} className="error-dismiss">✕</button>
+            ⚠️ {displayError}
+            <button
+              onClick={() => { setError(null); reset(); }}
+              className="error-dismiss"
+            >✕</button>
           </div>
         )}
 
-        {/* Invisible element at the bottom — scroll target */}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area — fixed at the bottom */}
       <div className="input-area">
         <VoiceButton
-          state={voiceState}
+          recorderState={recorderState}
           onClick={handleVoiceClick}
+          recordingDuration={recordingDuration}
         />
 
-        {/* Text input as fallback — real systems ALWAYS offer text + voice */}
         <form className="text-input-form" onSubmit={handleTextSubmit}>
           <input
             type="text"
@@ -172,17 +157,18 @@ function ChatWindow() {
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             placeholder="Or type your message..."
-            disabled={voiceState === 'loading'}
+            disabled={recorderState === RS.PROCESSING}
           />
           <button
             type="submit"
             className="send-btn"
-            disabled={!inputText.trim() || voiceState === 'loading'}
+            disabled={!inputText.trim() || recorderState === RS.PROCESSING}
           >
             Send
           </button>
         </form>
       </div>
+
     </div>
   );
 }
